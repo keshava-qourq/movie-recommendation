@@ -7,7 +7,24 @@ _No routes found._
 <!-- sdlc:auto:end endpoints -->
 
 <!-- sdlc:auto:start drift -->
-_Code matches the designed API._
+**Designed but missing:**
+
+- DELETE /me
+- DELETE /me/likes/{film_id}
+- GET /admin/catalog/uploads
+- GET /admin/catalog/uploads/{import_id}
+- GET /films/search
+- GET /films/suggest
+- GET /films/{film_id}
+- GET /films/{film_id}/similar
+- GET /me
+- GET /me/likes
+- GET /me/recommendations
+- POST /admin/catalog/uploads
+- POST /auth/login
+- POST /auth/logout
+- POST /auth/signup
+- PUT /me/likes/{film_id}
 <!-- sdlc:auto:end drift -->
 
 <!-- sdlc:auto:start source -->

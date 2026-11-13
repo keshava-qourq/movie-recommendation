@@ -2,6 +2,510 @@
 openapi: 3.1.0
 info:
   title: MOVIE Recommendation
-  version: architecture-v0
+  version: architecture-v1
   description: Designed API from the approved architecture (not extracted from code).
-paths: {}
+paths:
+  /admin/catalog/uploads:
+    get:
+      summary: Recent imports with their outcomes, so an admin can check or re-run
+        a previous upload.
+      description: Recent imports with their outcomes, so an admin can check or re-run
+        a previous upload.
+      operationId: get_admin_catalog_uploads
+      parameters: []
+      responses:
+        '200':
+          description: '200 { items: [{ import_id, original_filename, status, rows_added,
+            rows_updated, rows_rejected, started_at, finished_at }] }'
+      security:
+      - bearerAuth: []
+    post:
+      summary: Upload a catalogue CSV (id, title, year, plot, genres, director, cast,
+        optional poster_url). Stores the file in S3, merg
+      description: Upload a catalogue CSV (id, title, year, plot, genres, director,
+        cast, optional poster_url). Stores the file in S3, merges valid rows by movie
+        id, records rejected rows, then rebuilds the similarity vectors and returns
+        the report. Refuses an unreadable file or a missing header with the catalogue
+        unchanged.
+      operationId: post_admin_catalog_uploads
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 'multipart/form-data: file (text/csv)'
+      responses:
+        '200':
+          description: '201 { import_id, status, rows_added, rows_updated, rows_rejected,
+            rejected: [{ row_number, reason }], rebuild: { build_id, status, started_at,
+            finished_at } } | 400 { error: ''unreadable_csv'', message } | 403 { error:
+            ''admin_required'' }'
+      security:
+      - bearerAuth: []
+  /admin/catalog/uploads/{import_id}:
+    get:
+      summary: Poll an import's progress and read its final report, including the
+        rebuild's start and finish times or its failure reaso
+      description: Poll an import's progress and read its final report, including
+        the rebuild's start and finish times or its failure reason.
+      operationId: get_admin_catalog_uploads_import_id
+      parameters:
+      - name: import_id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: '200 { import_id, status, rows_added, rows_updated, rows_rejected,
+            rejected: [{ row_number, reason }], rebuild: { build_id, status, started_at,
+            finished_at, error } }'
+      security:
+      - bearerAuth: []
+  /auth/login:
+    post:
+      summary: Exchange email and password for an opaque session token returned in
+        the body. Any failure returns the same generic messa
+      description: Exchange email and password for an opaque session token returned
+        in the body. Any failure returns the same generic message.
+      operationId: post_auth_login
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: '{ email, password }'
+      responses:
+        '200':
+          description: '200 { token, expires_at, user: { id, email, role } } | 401
+            { error: ''invalid_credentials'' }'
+      security:
+      - bearerAuth: []
+  /auth/logout:
+    post:
+      summary: Revoke the current session immediately.
+      description: Revoke the current session immediately.
+      operationId: post_auth_logout
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: (empty body)
+      responses:
+        '200':
+          description: '204'
+      security:
+      - bearerAuth: []
+  /auth/signup:
+    post:
+      summary: Create a viewer account and start a session. Refuses a duplicate email
+        with a sign-in message, and returns field-level e
+      description: Create a viewer account and start a session. Refuses a duplicate
+        email with a sign-in message, and returns field-level errors for a malformed
+        email or a password under the minimum length.
+      operationId: post_auth_signup
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: '{ email, password }'
+      responses:
+        '200':
+          description: '201 { token, expires_at, user: { id, email, role } } | 409
+            { error: ''email_in_use'' } | 422 { field_errors }'
+      security:
+      - bearerAuth: []
+  /films/search:
+    get:
+      summary: Typo-tolerant, substring title search over the catalogue. Empty result
+        set returns an empty list, never an error.
+      description: Typo-tolerant, substring title search over the catalogue. Empty
+        result set returns an empty list, never an error.
+      operationId: get_films_search
+      parameters: []
+      responses:
+        '200':
+          description: '200 { items: [{ id, title, year, poster_url, liked }], total,
+            page }'
+      security:
+      - bearerAuth: []
+  /films/suggest:
+    get:
+      summary: Autocomplete suggestions for the search box. Returns an empty list
+        when q is shorter than two characters.
+      description: Autocomplete suggestions for the search box. Returns an empty list
+        when q is shorter than two characters.
+      operationId: get_films_suggest
+      parameters: []
+      responses:
+        '200':
+          description: '200 { items: [{ id, title, year }] }'
+      security:
+      - bearerAuth: []
+  /films/{film_id}:
+    get:
+      summary: Full film detail from the admin-uploaded catalogue. Unknown id returns
+        404 for the not-found page.
+      description: Full film detail from the admin-uploaded catalogue. Unknown id
+        returns 404 for the not-found page.
+      operationId: get_films_film_id
+      parameters:
+      - name: film_id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: '200 { id, title, year, plot, genres, director, cast, poster_url,
+            liked, has_vector } | 404 { error: ''film_not_found'' }'
+      security:
+      - bearerAuth: []
+  /films/{film_id}/similar:
+    get:
+      summary: Films ranked by cosine similarity against the active vector build,
+        excluding the film itself. Returns fewer than the lim
+      description: Films ranked by cosine similarity against the active vector build,
+        excluding the film itself. Returns fewer than the limit when the catalogue
+        is small, and an empty list with reason 'not_vectorised_yet' when the film
+        has no vector in the active build.
+      operationId: get_films_film_id_similar
+      parameters:
+      - name: film_id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: '200 { items: [{ id, title, year, poster_url, score, liked
+            }], reason }'
+      security:
+      - bearerAuth: []
+  /health:
+    get:
+      summary: Liveness and readiness probe reporting database, pgvector and Meilisearch
+        reachability.
+      description: Liveness and readiness probe reporting database, pgvector and Meilisearch
+        reachability.
+      operationId: get_health
+      parameters: []
+      responses:
+        '200':
+          description: 200 { status, db, search, active_build_id }
+      security:
+      - bearerAuth: []
+  /me:
+    get:
+      summary: Current account summary for the settings page, including the plain
+        statement that only email, password hash and like his
+      description: Current account summary for the settings page, including the plain
+        statement that only email, password hash and like history are stored.
+      operationId: get_me
+      parameters: []
+      responses:
+        '200':
+          description: '200 { id, email, role, created_at, data_held: [''email'',''password_hash'',''likes'']
+            }'
+      security:
+      - bearerAuth: []
+    delete:
+      summary: Delete the account, all its likes and all its sessions in one transaction
+        after the SPA's explicit confirmation step. Th
+      description: Delete the account, all its likes and all its sessions in one transaction
+        after the SPA's explicit confirmation step. The catalogue is untouched and
+        the email becomes reusable.
+      operationId: delete_me
+      parameters: []
+      responses:
+        '200':
+          description: '204'
+      security:
+      - bearerAuth: []
+  /me/likes:
+    get:
+      summary: Every film the signed-in viewer has liked, newest first, with title
+        and year for the My liked films page.
+      description: Every film the signed-in viewer has liked, newest first, with title
+        and year for the My liked films page.
+      operationId: get_me_likes
+      parameters: []
+      responses:
+        '200':
+          description: '200 { items: [{ id, title, year, poster_url, liked_at }] }'
+      security:
+      - bearerAuth: []
+  /me/likes/{film_id}:
+    put:
+      summary: Like a film from anywhere in the UI. Idempotent — a repeat leaves exactly
+        one like and returns 200.
+      description: Like a film from anywhere in the UI. Idempotent — a repeat leaves
+        exactly one like and returns 200.
+      operationId: put_me_likes_film_id
+      parameters:
+      - name: film_id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 'path: film_id'
+      responses:
+        '200':
+          description: '200 { film_id, liked: true } | 401 { error: ''sign_in_required''
+            } | 404 { error: ''film_not_found'' }'
+      security:
+      - bearerAuth: []
+    delete:
+      summary: Remove a like, making the film eligible for recommendation again.
+      description: Remove a like, making the film eligible for recommendation again.
+      operationId: delete_me_likes_film_id
+      parameters:
+      - name: film_id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: '204 | 401 { error: ''sign_in_required'' }'
+      security:
+      - bearerAuth: []
+  /me/recommendations:
+    get:
+      summary: 'For you: films ranked by cosine similarity to the mean vector of everything
+        the viewer has liked, excluding already-like'
+      description: 'For you: films ranked by cosine similarity to the mean vector
+        of everything the viewer has liked, excluding already-liked films. With no
+        likes it returns the prompt payload instead of a list.'
+      operationId: get_me_recommendations
+      parameters: []
+      responses:
+        '200':
+          description: '200 { items: [{ id, title, year, poster_url, score }], state:
+            ''ok'' | ''no_likes'' } | 401 { error: ''sign_in_required'' }'
+      security:
+      - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    users:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        password_hash:
+          type: string
+        role:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - email
+      - password_hash
+      - role
+      - created_at
+    sessions:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        token_hash:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - user_id
+      - token_hash
+      - created_at
+      - last_seen_at
+      - expires_at
+    films:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        year:
+          type: integer
+        plot:
+          type: string
+        genres:
+          type: string
+        director:
+          type: string
+        cast_members:
+          type: string
+        poster_url:
+          type: string
+        soup:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - title
+      - created_at
+      - updated_at
+    likes:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        film_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - user_id
+      - film_id
+      - created_at
+    vector_builds:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        import_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        is_active:
+          type: boolean
+        feature_count:
+          type: integer
+        film_count:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        error:
+          type: string
+      required:
+      - id
+      - status
+      - is_active
+      - feature_count
+      - started_at
+    film_vectors:
+      type: object
+      properties:
+        id:
+          type: string
+        film_id:
+          type: string
+        build_id:
+          type: string
+          format: uuid
+        embedding:
+          type: string
+      required:
+      - id
+      - film_id
+      - build_id
+      - embedding
+    catalog_imports:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        admin_user_id:
+          type: string
+          format: uuid
+        original_filename:
+          type: string
+        s3_key:
+          type: string
+        status:
+          type: string
+        rows_added:
+          type: integer
+        rows_updated:
+          type: integer
+        rows_rejected:
+          type: integer
+        message:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - original_filename
+      - s3_key
+      - status
+      - rows_added
+      - rows_updated
+      - rows_rejected
+      - started_at
+    catalog_import_rows:
+      type: object
+      properties:
+        id:
+          type: string
+        import_id:
+          type: string
+          format: uuid
+        row_number:
+          type: integer
+        reason:
+          type: string
+        raw_excerpt:
+          type: string
+      required:
+      - id
+      - import_id
+      - row_number
+      - reason
