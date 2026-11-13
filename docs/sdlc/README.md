@@ -14,7 +14,7 @@ Users sign up and log in with email and password, so their likes are
 saved to their account. There are two roles: viewer and admin.
 Only admins can upload the movie list as a CSV.
 
-**Documentation version:** v2
+**Documentation version:** v3
 <!-- sdlc:auto:end overview -->
 
 ## Contents
@@ -24,7 +24,7 @@ Only admins can upload the movie list as a CSV.
 |---|---|
 | [Requirements](requirements/README.md) | v1 approved |
 | [Architecture](architecture/README.md) | 34 entries |
-| [Planning](planning/README.md) | 6 entries |
+| [Planning](planning/README.md) | 11 entries |
 | [Development](development/README.md) | 0 entries |
 | [Testing](testing/README.md) | 0 entries |
 | [Deployment](deployment/README.md) | 0 entries |
@@ -41,5 +41,5 @@ Only admins can upload the movie list as a CSV.
 | [Runbook](deployment/runbook.md) | not deployed yet |
 | [Release notes](deployment/release-notes.md) | 0 releases |
 | [Traceability matrix](traceability-matrix.md) | 20 requirements |
-| [Changelog](CHANGELOG.md) | 2 versions |
+| [Changelog](CHANGELOG.md) | 3 versions |
 <!-- sdlc:auto:end contents -->
